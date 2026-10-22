@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>網課觀看紀錄系統 (實時同步版)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 圖示庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f1f5f9;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* 美化滾動條 */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 99px;
+        }
+        .progress-bar-fill {
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col pb-10">
+
+    <!-- 頂部導覽列 (Mobile-First) -->
+    <header class="bg-indigo-600 text-white sticky top-0 z-30 shadow-md">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2.5">
+                <div class="bg-white/10 p-2 rounded-xl backdrop-blur-md">
+                    <i class="fa-solid fa-book-open text-lg text-indigo-100"></i>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold leading-tight">網課觀看紀錄系統</h1>
+                    <p class="text-[11px] text-indigo-200 flex items-center gap-1">
+                        <span id="sync-status-dot" class="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse"></span>
+                        <span id="sync-status-text">連線中...</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- 房間代碼與分享按鈕 -->
+            <button id="room-modal-btn" class="flex items-center space-x-1.5 bg-indigo-700 hover:bg-indigo-800 active:scale-95 text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-500/50 transition-all shadow-sm">
+                <i class="fa-solid fa-arrows-rotate text-indigo-300"></i>
+                <span id="header-room-code">載入中...</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 主要區域 -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-5">
+
+        <!-- 同步代碼 Banner / 快速分享區 -->
+        <section class="bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                    <span class="bg-indigo-500/30 text-indigo-300 text-xs px-2 py-0.5 rounded font-mono">房間代碼</span>
+                    <span id="banner-room-id" class="font-bold text-lg text-amber-300 font-mono tracking-wide">default-room</span>
+                </div>
+                <p class="text-xs text-slate-300">所有打開相同房間連結或代碼的手機，皆會即時同步資料！</p>
+            </div>
+            <div class="flex items-center space-x-2 w-full sm:w-auto">
+                <button id="copy-link-btn" class="flex-1 sm:flex-initial bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 px-3.5 rounded-xl flex items-center justify-center space-x-1.5 shadow transition-all active:scale-95">
+                    <i class="fa-solid fa-link"></i>
+                    <span>複製連結</span>
+                </button>
+                <button id="change-room-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-3.5 rounded-xl border border-slate-700 flex items-center justify-center space-x-1.5 transition-all active:scale-95">
+                    <i class="fa-solid fa-key"></i>
+                    <span>切換代碼</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 數據概覽 (小卡片) -->
+        <section class="grid grid-cols-3 gap-2.5 sm:gap-4">
+            <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <p class="text-[11px] sm:text-xs font-semibold text-slate-400">總進度</p>
+                <h3 id="stat-total-progress" class="text-lg sm:text-2xl font-black text-indigo-600 mt-0.5">0%</h3>
+                <p id="stat-classes-detail" class="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">0 / 0 堂</p>
+            </div>
+            <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <p class="text-[11px] sm:text-xs font-semibold text-slate-400">已結課</p>
+                <h3 id="stat-completed-courses" class="text-lg sm:text-2xl font-black text-emerald-600 mt-0.5">0 / 13</h3>
+                <p class="text-[10px] sm:text-xs text-slate-400 mt-0.5">完成全堂數</p>
+            </div>
+            <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <p class="text-[11px] sm:text-xs font-semibold text-slate-400">總紀錄</p>
+                <h3 id="stat-total-logs" class="text-lg sm:text-2xl font-black text-slate-800 mt-0.5">0 次</h3>
+                <p id="stat-latest-log-date" class="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">無紀錄</p>
+            </div>
+        </section>
+
+        <!-- 主要表單與歷史紀錄區塊 (欄位調整) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            
+            <!-- 表單區 -->
+            <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm lg:col-span-1">
+                <div class="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-4">
+                    <i class="fa-solid fa-plus-circle text-indigo-600 text-lg"></i>
+                    <h2 class="text-base font-bold text-slate-800">新增觀看紀錄</h2>
+                </div>
+
+                <form id="add-log-form" class="space-y-3.5">
+                    <!-- 科目下拉選項 (純粹科目名稱) -->
+                    <div>
+                        <label for="course-select" class="block text-xs font-semibold text-slate-600 mb-1">選擇科目 <span class="text-red-500">*</span></label>
+                        <select id="course-select" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <option value="" disabled selected>請選擇科目</option>
+                        </select>
+                    </div>
+
+                    <!-- 觀看日期 -->
+                    <div>
+                        <label for="log-date" class="block text-xs font-semibold text-slate-600 mb-1">觀看日期 <span class="text-red-500">*</span></label>
+                        <input type="date" id="log-date" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+
+                    <!-- 觀看堂數 -->
+                    <div>
+                        <label for="log-lesson" class="block text-xs font-semibold text-slate-600 mb-1">觀看課堂 <span class="text-red-500">*</span></label>
+                        <div class="relative flex items-center">
+                            <span class="absolute left-3.5 text-xs text-slate-400 font-medium pointer-events-none">第</span>
+                            <input type="number" id="log-lesson" min="1" max="100" value="1" required class="w-full pl-9 pr-12 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                            <span class="absolute right-3.5 text-xs text-slate-400 font-medium pointer-events-none">堂</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="submit-log-btn" class="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                        <span>同步新增紀錄</span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- 歷史紀錄 -->
+            <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-600 text-lg"></i>
+                        <h2 class="text-base font-bold text-slate-800">歷史觀看紀錄</h2>
+                    </div>
+                    <span id="log-count-badge" class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-semibold">0 筆</span>
+                </div>
+
+                <div class="overflow-x-auto max-h-[340px] overflow-y-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 bg-white shadow-sm">
+                            <tr class="border-b border-slate-200 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                <th class="py-2.5 px-3">日期</th>
+                                <th class="py-2.5 px-3">觀看詳情</th>
+                                <th class="py-2.5 px-3 text-right">刪除</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-logs-tbody" class="divide-y divide-slate-100 text-sm">
+                            <!-- 動態生成紀錄 -->
+                        </tbody>
+                    </table>
+
+                    <div id="empty-log-msg" class="py-10 text-center">
+                        <i class="fa-regular fa-folder-open text-slate-300 text-3xl mb-2 block"></i>
+                        <p class="text-slate-400 text-xs">尚無觀看紀錄，立即新增第一筆吧！</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 各科學習進度總覽 -->
+        <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-chart-column text-indigo-600 text-lg"></i>
+                    <h2 class="text-base font-bold text-slate-800">各科學習進度總覽</h2>
+                </div>
+                <div class="text-[11px] text-slate-500">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1"></span>已完結
+                    <span class="inline-block w-2 h-2 rounded-full bg-indigo-600 ml-2 mr-1"></span>進行中
+                </div>
+            </div>
+
+            <!-- 進度列表卡片 -->
+            <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <!-- 動態生成各科卡片 -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 房間代碼切換彈窗 (Modal) -->
+    <div id="room-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-slate-800 text-base">切換同步房間</h3>
+                <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 text-lg p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed">
+                輸入自訂的房間代碼（例如 <code class="bg-slate-100 px-1 rounded text-indigo-600">my-study-2026</code>），只要多台手機輸入相同的代碼，即可同步觀看進度！
+            </p>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">房間代碼 (Room Code)</label>
+                <input type="text" id="custom-room-input" placeholder="例如: police-2026" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+            </div>
+            <div class="flex space-x-2 pt-2">
+                <button id="save-room-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl text-xs shadow-md transition-all">
+                    確定切換房間
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 浮動提示 Toast -->
+    <div id="notification" class="fixed bottom-5 right-5 left-5 sm:left-auto sm:max-w-xs transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 z-50 pointer-events-none">
+        <span id="notification-icon" class="text-emerald-400 text-lg"><i class="fa-solid fa-circle-check"></i></span>
+        <span id="notification-msg" class="text-xs font-medium leading-tight">操作成功</span>
+    </div>
+
+    <!-- Firebase SDK 模組 (v11.6.1) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 全局全效 AppID & Firebase Config 處理
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'course-tracker-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "demo-key", authDomain: "demo.firebaseapp.com", projectId: "demo-project" };
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // 圖片擷取的 13 個完整預設科目
+        const DEFAULT_COURSES = [
+            { id: 'c1', name: '刑法', total: 34 },
+            { id: 'c2', name: '偵查法學', total: 12 },
+            { id: 'c3', name: '中華民國憲法', total: 12 },
+            { id: 'c4', name: '警察法規', total: 23 },
+            { id: 'c5', name: '犯罪偵查', total: 9 },
+            { id: 'c6', name: '警察情境實務', total: 10 },
+            { id: 'c7', name: '刑事鑑識', total: 1 },
+            { id: 'c8', name: '2026警特法條記憶班', total: 2 },
+            { id: 'c9', name: '近兩年重要憲法判決整理', total: 2 },
+            { id: 'c10', name: '刑法重要實務見解彙整', total: 2 },
+            { id: 'c11', name: '刑訴概說-證據法則', total: 1 },
+            { id: 'c12', name: '刑訴概說-強制處分', total: 1 },
+            { id: 'c13', name: '行政法從最高行政法院111年上675號判決 討論警察臨檢行為之性質與救濟方法之妥適性', total: 1 }
+        ];
+
+        // 應用程式狀態
+        let currentUser = null;
+        let roomCode = 'default';
+        let logs = [];
+        let unsubscribeLogs = null;
+
+        // 初始化進入點
+        window.addEventListener('DOMContentLoaded', async () => {
+            initRoomCodeFromUrl();
+            setupFormDate();
+            renderCourseOptions();
+            await initAuth();
+        });
+
+        // 解析 URL 參數以獲取 RoomCode
+        function initRoomCodeFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRoom = urlParams.get('room');
+            if (urlRoom && urlRoom.trim() !== '') {
+                roomCode = urlRoom.trim().toLowerCase();
+            } else {
+                roomCode = localStorage.getItem('course_tracker_room_code') || 'public-room';
+            }
+            updateRoomUI();
+        }
+
+        // 更新房間名稱顯示
+        function updateRoomUI() {
+            document.getElementById('banner-room-id').textContent = roomCode;
+            document.getElementById('header-room-code').textContent = roomCode;
+            localStorage.setItem('course_tracker_room_code', roomCode);
+        }
+
+        // Firebase 驗證初始化
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.warn("Auth error, attempting anonymous sign in...", err);
+                await signInAnonymously(auth);
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    updateSyncStatus(true, '已連線同步');
+                    listenToLogs();
+                } else {
+                    updateSyncStatus(false, '未連線');
+                }
+            });
+        }
+
+        // 監聽歷史紀錄實時變動 (RULE 1 & RULE 2)
+        function listenToLogs() {
+            if (!currentUser) return;
+
+            if (unsubscribeLogs) unsubscribeLogs();
+
+            // Firestore 嚴格路徑：/artifacts/{appId}/public/data/logs_{roomCode}
+            const collectionPath = collection(db, 'artifacts', appId, 'public', 'data', `logs_${roomCode}`);
+
+            unsubscribeLogs = onSnapshot(collectionPath, 
+                (snapshot) => {
+                    logs = [];
+                    snapshot.forEach(docSnap => {
+                        logs.push({
+                            id: docSnap.id,
+                            ...docSnap.data()
+                        });
+                    });
+
+                    // 在記憶體中進行排序 (按日期/時間倒序)
+                    logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                    renderAll();
+                    updateSyncStatus(true, '已即時同步');
+                },
+                (error) => {
+                    console.error("Firestore Listen Error:", error);
+                    updateSyncStatus(false, '同步發生錯誤');
+                }
+            );
+        }
+
+        // 設定表單日期為今日
+        function setupFormDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('log-date').value = today;
+        }
+
+        // 渲染純粹科目名稱下拉選單
+        function renderCourseOptions() {
+            const select = document.getElementById('course-select');
+            select.innerHTML = '<option value="" disabled selected>請選擇科目</option>';
+            
+            DEFAULT_COURSES.forEach(course => {
+                const opt = document.createElement('option');
+                opt.value = course.id;
+                opt.textContent = course.name; // 純粹顯示科目名稱
+                select.appendChild(opt);
+            });
+        }
+
+        // 渲染整體介面
+        function renderAll() {
+            // 1. 計算各科進度
+            const calculatedCourses = DEFAULT_COURSES.map(course => {
+                const courseLogs = logs.filter(l => l.courseId === course.id);
+                let current = 0;
+                if (courseLogs.length > 0) {
+                    const maxLesson = Math.max(...courseLogs.map(l => Number(l.lesson) || 0));
+                    current = Math.min(maxLesson, course.total);
+                }
+                return { ...course, current };
+            });
+
+            // 2. 渲染各科進度條
+            renderCourseCards(calculatedCourses);
+
+            // 3. 渲染歷史觀看紀錄表格
+            renderHistoryTable();
+
+            // 4. 渲染總體統計
+            renderStats(calculatedCourses);
+        }
+
+        // 渲染進度條卡片列表
+        function renderCourseCards(courseData) {
+            const grid = document.getElementById('courses-grid');
+            grid.innerHTML = '';
+
+            courseData.forEach(course => {
+                const percent = Math.min(100, Math.round((course.current / course.total) * 100));
+                const isCompleted = course.current >= course.total;
+
+                const card = document.createElement('div');
+                card.className = `p-3.5 sm:p-4 rounded-xl border transition-all ${
+                    isCompleted 
+                        ? 'bg-emerald-50/40 border-emerald-200' 
+                        : 'bg-white border-slate-200 hover:border-indigo-200'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2 gap-2">
+                        <div class="flex items-start space-x-2">
+                            <span class="mt-0.5 text-sm ${isCompleted ? 'text-emerald-500' : 'text-slate-400'}">
+                                <i class="fa-${isCompleted ? 'solid fa-circle-check' : 'regular fa-bookmark'}"></i>
+                            </span>
+                            <h3 class="font-bold text-slate-800 text-xs sm:text-sm leading-snug">${escapeHtml(course.name)}</h3>
+                        </div>
+                        <span class="text-[11px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                            isCompleted 
+                                ? 'bg-emerald-100 text-emerald-700' 
+                                : 'bg-indigo-50 text-indigo-600'
+                        }">
+                            ${percent}%
+                        </span>
+                    </div>
+
+                    <div class="space-y-1 mt-2.5">
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div class="progress-bar-fill h-full rounded-full ${
+                                isCompleted ? 'bg-emerald-500' : 'bg-indigo-600'
+                            }" style="width: ${percent}%;"></div>
+                        </div>
+                        <div class="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+                            <span>已進展至：第 <strong class="text-slate-800 font-semibold">${course.current}</strong> 堂</span>
+                            <span>總堂數：${course.total} 堂</span>
+                        </div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        // 渲染歷史紀錄表格
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-logs-tbody');
+            const emptyMsg = document.getElementById('empty-log-msg');
+            const badge = document.getElementById('log-count-badge');
+
+            tbody.innerHTML = '';
+            badge.textContent = `${logs.length} 筆`;
+
+            if (logs.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            } else {
+                emptyMsg.classList.add('hidden');
+            }
+
+            logs.forEach(log => {
+                const course = DEFAULT_COURSES.find(c => c.id === log.courseId);
+                const courseName = course ? course.name : '未知科目';
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition-colors';
+
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 text-xs text-slate-500 font-mono whitespace-nowrap">${log.date}</td>
+                    <td class="py-2.5 px-3 font-medium text-slate-800 text-xs sm:text-sm">
+                        看過 <span class="text-indigo-600 font-semibold">${escapeHtml(courseName)}</span> 
+                        <span class="inline-flex items-center px-1.5 py-0.5 ml-1 rounded bg-indigo-50 text-indigo-700 font-bold text-xs">
+                            第 ${log.lesson} 堂
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                        <button data-id="${log.id}" class="delete-log-btn text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-all">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            // 綁定刪除事件
+            document.querySelectorAll('.delete-log-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    deleteLog(id);
+                });
+            });
+        }
+
+        // 渲染統計概覽
+        function renderStats(courseData) {
+            let totalClasses = 0;
+            let currentClasses = 0;
+            let completedCount = 0;
+
+            courseData.forEach(c => {
+                totalClasses += c.total;
+                currentClasses += Math.min(c.current, c.total);
+                if (c.current >= c.total) completedCount++;
+            });
+
+            const overallPercent = totalClasses > 0 ? Math.round((currentClasses / totalClasses) * 100) : 0;
+
+            document.getElementById('stat-total-progress').textContent = `${overallPercent}%`;
+            document.getElementById('stat-classes-detail').textContent = `${currentClasses} / ${totalClasses} 堂`;
+            document.getElementById('stat-completed-courses').textContent = `${completedCount} / ${courseData.length}`;
+            document.getElementById('stat-total-logs').textContent = `${logs.length} 次`;
+
+            if (logs.length > 0) {
+                document.getElementById('stat-latest-log-date').textContent = `${logs[0].date}`;
+            } else {
+                document.getElementById('stat-latest-log-date').textContent = `無紀錄`;
+            }
+        }
+
+        // 新增觀看紀錄至 Firestore
+        document.getElementById('add-log-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!currentUser) {
+                showNotification('連線初始化中，請稍後...', 'error');
+                return;
+            }
+
+            const courseId = document.getElementById('course-select').value;
+            const date = document.getElementById('log-date').value;
+            const lesson = parseInt(document.getElementById('log-lesson').value, 10);
+
+            const course = DEFAULT_COURSES.find(c => c.id === courseId);
+            if (!course || !date || isNaN(lesson) || lesson <= 0) {
+                showNotification('請輸入正確的科目與堂數', 'error');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submit-log-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-70');
+
+            try {
+                const collectionPath = collection(db, 'artifacts', appId, 'public', 'data', `logs_${roomCode}`);
+                await addDoc(collectionPath, {
+                    courseId,
+                    date,
+                    lesson,
+                    timestamp: Date.now(),
+                    createdBy: currentUser.uid
+                });
+
+                showNotification(`已新增：《${course.name}》第 ${lesson} 堂`);
+                document.getElementById('log-lesson').value = lesson + 1;
+            } catch (err) {
+                console.error("Error adding log:", err);
+                showNotification('新增失敗，請檢查網路狀態', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-70');
+            }
+        });
+
+        // 刪除紀錄
+        async function deleteLog(logId) {
+            if (!currentUser) return;
+
+            try {
+                const docPath = doc(db, 'artifacts', appId, 'public', 'data', `logs_${roomCode}`, logId);
+                await deleteDoc(docPath);
+                showNotification('已同步刪除紀錄');
+            } catch (err) {
+                console.error("Error deleting log:", err);
+                showNotification('刪除失敗', 'error');
+            }
+        }
+
+        // 複製跨手機分享連結
+        document.getElementById('copy-link-btn').addEventListener('click', () => {
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', roomCode);
+
+            const textToCopy = url.toString();
+            
+            // execCommand 替代以符合限制環境
+            const tempInput = document.createElement('input');
+            tempInput.value = textToCopy;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            showNotification('已複製專屬同步連結！發送給手機即可同步');
+        });
+
+        // 彈窗 Modal 開啟與關閉
+        const modal = document.getElementById('room-modal');
+        document.getElementById('change-room-btn').addEventListener('click', () => {
+            document.getElementById('custom-room-input').value = roomCode;
+            modal.classList.remove('hidden');
+        });
+        document.getElementById('room-modal-btn').addEventListener('click', () => {
+            document.getElementById('custom-room-input').value = roomCode;
+            modal.classList.remove('hidden');
+        });
+        document.getElementById('close-modal-btn').addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        // 確定切換房間
+        document.getElementById('save-room-btn').addEventListener('click', () => {
+            const inputVal = document.getElementById('custom-room-input').value.trim();
+            if (!inputVal) {
+                showNotification('請輸入有效的房間代碼', 'error');
+                return;
+            }
+
+            roomCode = inputVal.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+            updateRoomUI();
+            modal.classList.add('hidden');
+            listenToLogs();
+            showNotification(`已切換至房間：${roomCode}`);
+        });
+
+        // 更新連線 UI 狀態
+        function updateSyncStatus(isOnline, text) {
+            const dot = document.getElementById('sync-status-dot');
+            const textElem = document.getElementById('sync-status-text');
+
+            textElem.textContent = text;
+            if (isOnline) {
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 inline-block';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-rose-500 inline-block animate-pulse';
+            }
+        }
+
+        // Toast 彈窗
+        function showNotification(msg, type = 'success') {
+            const toast = document.getElementById('notification');
+            const toastMsg = document.getElementById('notification-msg');
+            const toastIcon = document.getElementById('notification-icon');
+
+            toastMsg.textContent = msg;
+
+            if (type === 'error') {
+                toastIcon.className = 'text-rose-400 text-base';
+                toastIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+            } else {
+                toastIcon.className = 'text-emerald-400 text-base';
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
