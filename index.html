@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>我的網課進度追蹤</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f7ff; padding: 20px; color: #334155; margin: 0; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.05); }
+        h1 { color: #0369a1; text-align: center; margin-top: 0; margin-bottom: 25px; font-weight: bold; }
+        h2 { color: #0284c7; margin-top: 0; font-size: 1.3rem; border-bottom: 2px solid #e0f2fe; padding-bottom: 8px; }
+        .main-layout { display: flex; gap: 30px; }
+        .left-column { flex: 1; min-width: 0; } 
+        .right-column { flex: 1; min-width: 0; } 
+        @media (max-width: 800px) { .main-layout { flex-direction: column; } }
+        .section-box { background: #ffffff; border: 1px solid #e0f2fe; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .subject-item { margin-bottom: 12px; font-size: 0.95rem; }
+        .progress-bg { background: #f1f5f9; border-radius: 10px; height: 10px; width: 100%; margin: 5px 0; overflow: hidden; }
+        .progress-bar { background: #38bdf8; height: 100%; width: 0%; transition: width 0.3s; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; color: #475569; }
+        select, input { width: 100%; padding: 8px; box-sizing: border-box; border-radius: 4px; border: 1px solid #bae6fd; font-size: 1rem; background-color: #fafcfe; }
+        select:focus, input:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2); }
+        button { background: #0284c7; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 5px; border-radius: 4px; transition: background 0.2s; width: 100%; padding: 10px; }
+        button:hover { background: #0369a1; }
+        .log-container { max-height: 600px; overflow-y: auto; padding-right: 5px; }
+        .log-item { background: #f4f9ff; padding: 10px 12px; margin-bottom: 8px; border-left: 4px solid #38bdf8; font-size: 0.9rem; border-radius: 0 4px 4px 0; line-height: 1.4; border-top: 1px solid #f0f7ff; border-bottom: 1px solid #e0f2fe; }
+        .log-time { color: #64748b; font-size: 0.8rem; font-weight: normal; margin-bottom: 3px; display: block; }
+        .action-grid { display: flex; gap: 10px; margin-top: 10px; }
+        .backup-btn { background: #0ea5e9; color: white; font-size: 0.85rem; padding: 8px; font-weight: bold; border-radius: 4px; border: none; width: 50%; cursor: pointer; }
+        .backup-btn:hover { background: #0284c7; }
+        .clear-btn { background: transparent; color: #ef4444; border: 1px solid #fca5a5; font-size: 0.85rem; padding: 8px; font-weight: normal; border-radius: 4px; width: 50%; cursor: pointer; }
+        .clear-btn:hover { background: #fee2e2; border-color: #ef4444; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📖 網課進度追蹤（永久儲存版）</h1>
+    <div class="main-layout">
+        <div class="left-column">
+            <div class="section-box">
+                <h2>📊 目前進度</h2>
+                <div id="progressArea"></div>
+            </div>
+            <div class="section-box">
+                <h2>➕ 新增觀看紀錄</h2>
+                <form id="studyForm">
+                    <div class="form-group">
+                        <label>選擇科目</label>
+                        <select id="subSelect"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>觀看堂數</label>
+                        <input type="number" id="lesNum" min="1" placeholder="例如：填寫 5 代表看第 5 堂" required>
+                    </div>
+                    <div class="form-group">
+                        <label>觀看日期</label>
+                        <input type="date" id="watchDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label>觀看次數</label>
+                        <select id="countSelect">
+                            <option value="第 1 次觀看">第 1 次觀看</option>
+                            <option value="第 2 次觀看">第 2 次觀看</option>
+                            <option value="第 3 次觀看">第 3 次觀看</option>
+                            <option value="第 4 次觀看">第 4 次觀看</option>
+                            <option value="第 5 次觀看">第 5 次觀看</option>
+                        </select>
+                    </div>
+                    <button type="submit">儲存紀錄</button>
+                </form>
+                <div class="action-grid">
+                    <button class="backup-btn" onclick="exportBackup()">📤 匯出備份檔案</button>
+                    <button class="clear-btn" onclick="resetAll()">⚠️ 重設所有資料</button>
+                </div>
+            </div>
+        </div>
+        <div class="right-column">
+            <div class="section-box" style="height: 94%;">
+                <h2>📜 歷史足跡</h2>
+                <div class="log-container" id="logArea"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    const config = {
+        "刑法": 34, "偵查法學": 12, "中華民國憲法": 12, "警察法規": 23, "犯罪偵查": 9,
+        "警察情境實務": 10, "刑事鑑識": 1, "2026警特法條記憶班": 2, "近兩年重要憲法判決整理": 2,
+        "刑法重要實務見解": 2, "刑訴概說-證據法則": 1, "刑訴概說-強制處分": 1,
+        "行政法院111年上675號判決(警察臨檢)": 1
+    };
+    const initialProgress = {
+        "刑法": 34, "偵查法學": 12, "中華民國憲法": 12, "警察法規": 15, "犯罪偵查": 1,
+        "警察情境實務": 2, "刑事鑑識": 1, "2026警特法條記憶班": 0, "近兩年重要憲法判決整理": 2,
+        "刑法重要實務見解": 2, "刑訴概說-證據法則": 1, "刑訴概 we-強制處分": 1,
+        "行政法院111年上675號判決(警察臨檢)": 1
+    };
+    let watchedData = {};
+    let logs = [];
+    const todayStr = "2026-10-21";
+    document.getElementById('watchDate').value = todayStr;
+
+    function initData() {
+        const savedWatched = localStorage.getItem('police_watched_v3_stable');
+        const savedLogs = localStorage.getItem('police_logs_v3_stable');
+        if (savedWatched && savedLogs) {
+            const parsed = JSON.parse(savedWatched);
+            for (let name in config) { watchedData[name] = new Set(parsed[name] || []); }
+            logs = JSON.parse(savedLogs);
+        } else {
+            for (let name in config) {
+                watchedData[name] = new Set();
+                const count = initialProgress[name];
+                for (let i = 1; i <= count; i++) { watchedData[name].add(i); }
+            }
+            logs = [`<span class="log-time">📅 ${todayStr}</span>系統已成功載入您的既有進度，開始記錄新進度！`];
+            saveToStorage();
+        }
+    }
+    function saveToStorage() {
+        let exportWatched = {};
+        for (let name in watchedData) { exportWatched[name] = Array.from(watchedData[name]); }
+        localStorage.setItem('police_watched_v3_stable', JSON.stringify(exportWatched));
+        localStorage.setItem('police_logs_v3_stable', JSON.stringify(logs));
+    }
+    function refreshUI() {
+        const progArea = document.getElementById('progressArea');
+        const select = document.getElementById('subSelect');
+        const logArea = document.getElementById('logArea');
+        progArea.innerHTML = ''; select.innerHTML = '';
+        for (let name in config) {
+            const total = config[name];
+            const current = watchedData[name].size;
+            const percent = Math.round((current / total) * 100);
+            progArea.innerHTML += `
+                <div class="subject-item">
+                    <strong>${name}</strong> (${current} / ${total} 堂) - ${percent}%
+                    <div class="progress-bg"><div class="progress-bar" style="width: ${percent}%"></div></div>
+                </div>
+            `;
+            select.innerHTML += `<option value="${name}">${name}</option>`;
+        }
+        logArea.innerHTML = logs.map(htmlText => `<div class="log-item">${htmlText}</div>`).join('');
+    }
+    function exportBackup() {
+        let exportWatched = {};
+        for (let name in watchedData) { exportWatched[name] = Array.from(watchedData[name]); }
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ watched: exportWatched, history: logs }));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `警特網課進度備份_${todayStr}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click(); downloadAnchor.remove();
+    }
+    document.getElementById('studyForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const sub = document.getElementById('subSelect').value;
+        const les = parseInt(document.getElementById('lesNum').value);
+        const userDate = document.getElementById('watchDate').value; 
+        const countText = document.getElementById('countSelect').value;
+        if (les > config[sub]) { alert(`錯誤：${sub}總共只有 ${config[sub]} 堂課！`); return; }
+        watchedData[sub].add(les);
+        const timeHtml = `<span class="log-time">📅 ${userDate}</span>`;
+        logs.unshift(`${timeHtml}觀看了 <strong>${sub}</strong> 第 ${les} 堂課 （${countText}）`);
+        saveToStorage(); refreshUI();
+        document.getElementById('lesNum').value = ''; 
+    });
+    function resetAll() {
+        if(confirm("確定要重設嗎？這將會把所有自訂紀錄清除，並恢復到最初的預設進度喔！")) {
+            localStorage.removeItem('police_watched_v3_stable');
+            localStorage.removeItem('police_logs_v3_stable');
+            initData(); refreshUI();
+        }
+    }
+    initData(); refreshUI();
+</script>
+</body>
+</html>
